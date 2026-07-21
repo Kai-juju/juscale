@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aspect — frame calculator</title>
+<style>
+  :root{
+    --bg:#0E1116; --panel:#161B22; --well:#1B212B; --line:#29313C; --line-2:#39424F;
+    --ink:#EAEDF1; --muted:#8A94A2; --amber:#E9A94C; --amber-2:#F3C57E;
+    --amber-tint:rgba(233,169,76,.13); --cyan:#6FC3D6; --warn:#E8846B;
+    --mono:'JetBrains Mono','SFMono-Regular',ui-monospace,Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    --r:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--bg); color:var(--ink); font-family:var(--sans);
+    -webkit-font-smoothing:antialiased; line-height:1.4;
+    padding:22px; min-height:100vh;
+  }
+  a{color:var(--cyan)}
+
+  /* ---------- masthead ---------- */
+  .masthead{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;
+    padding-bottom:16px; margin-bottom:18px; border-bottom:1px solid var(--line);}
+  .mark{font-family:var(--mono); font-size:15px; letter-spacing:.38em; text-transform:uppercase;
+    color:var(--ink); display:flex; align-items:center; gap:9px;}
+  .mark .iris{width:13px;height:13px;border-radius:50%;
+    background:conic-gradient(from -35deg,var(--amber) 0 50%,#0B0E12 50% 100%);
+    box-shadow:0 0 0 1px var(--line-2);}
+  .sub{font-family:var(--mono); font-size:11px; letter-spacing:.12em; color:var(--muted);}
+
+  /* ---------- layout ---------- */
+  .layout{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);
+    gap:22px; max-width:1080px; margin:0 auto;}
+  @media (max-width:860px){ .layout{grid-template-columns:1fr} .stage{order:-1} }
+
+  /* ---------- stage / preview ---------- */
+  .stage{position:sticky; top:22px; align-self:start;}
+  @media (max-width:860px){ .stage{position:static} }
+
+  .readout{background:var(--panel); border:1px solid var(--line); border-radius:var(--r);
+    padding:14px 16px; margin-bottom:14px;}
+  .ro-label{font-family:var(--mono); font-size:10px; letter-spacing:.22em; color:var(--muted);
+    text-transform:uppercase;}
+  .ro-dims{display:flex; align-items:center; gap:10px; margin-top:5px;}
+  .ro-dims .n{font-family:var(--mono); font-size:38px; line-height:1; color:var(--amber-2);
+    font-weight:500; letter-spacing:-.01em;}
+  .ro-dims .x{font-family:var(--mono); font-size:24px; color:var(--muted);}
+  .ro-dims.small .n{font-size:22px; color:var(--ink);}
+  .ro-dims.small .x{font-size:16px;}
+  .copy{margin-left:auto; font-family:var(--mono); font-size:11px; letter-spacing:.08em;
+    color:var(--muted); background:var(--well); border:1px solid var(--line-2);
+    border-radius:7px; padding:6px 11px; cursor:pointer; transition:.15s;}
+  .copy:hover{color:var(--ink); border-color:var(--amber);}
+  .copy.ok{color:#0E1116; background:var(--amber); border-color:var(--amber);}
+  .readout-storage{margin-top:12px; padding-top:12px; border-top:1px dashed var(--line-2);}
+  .hidden{display:none !important}
+
+  .viewport{background:
+      radial-gradient(120% 90% at 50% 40%, #12161D 0%, #0B0E12 100%);
+    border:1px solid var(--line); border-radius:var(--r); padding:8px;}
+  svg{display:block; width:100%; height:auto;}
+
+  .meta{margin-top:12px; display:flex; flex-direction:column; gap:5px;}
+  .meta .row{font-family:var(--mono); font-size:12px; color:var(--muted);
+    display:flex; gap:8px; align-items:center;}
+  .meta .row b{color:var(--ink); font-weight:500;}
+  .meta .row.warn{color:var(--warn);}
+  .tag{font-family:var(--mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase;
+    padding:2px 7px; border-radius:5px; border:1px solid var(--line-2); color:var(--muted);}
+  .tag.lb{color:var(--amber); border-color:rgba(233,169,76,.4);}
+
+  /* ---------- controls ---------- */
+  .controls{display:flex; flex-direction:column; gap:16px;}
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:15px 16px;}
+  .plabel{font-family:var(--mono); font-size:10px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:11px; display:flex; align-items:center; gap:10px;}
+  .plabel .swap{margin-left:auto; cursor:pointer; background:var(--well); border:1px solid var(--line-2);
+    color:var(--muted); border-radius:6px; padding:3px 8px; font-family:var(--mono); font-size:11px;
+    letter-spacing:.05em; transition:.15s;}
+  .plabel .swap:hover{color:var(--amber); border-color:var(--amber);}
+
+  .field{display:flex; gap:10px; align-items:stretch;}
+  input[type=number], input[type=text]{
+    flex:1; min-width:0; background:var(--well); border:1px solid var(--line-2); color:var(--ink);
+    font-family:var(--mono); font-size:20px; border-radius:8px; padding:10px 12px; outline:none;
+    -moz-appearance:textfield;}
+  input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  input:focus-visible{border-color:var(--amber); box-shadow:0 0 0 3px var(--amber-tint);}
+  input.bad{border-color:var(--warn);}
+
+  /* segmented */
+  .seg{display:inline-flex; background:var(--well); border:1px solid var(--line-2);
+    border-radius:8px; padding:3px; gap:2px;}
+  .seg button{font-family:var(--mono); font-size:13px; color:var(--muted); background:transparent;
+    border:0; border-radius:6px; padding:8px 12px; cursor:pointer; transition:.12s; letter-spacing:.02em;}
+  .seg button[aria-pressed=true]{background:var(--amber); color:#0E1116; font-weight:600;}
+  .seg.full{display:flex; margin-top:0;}
+  .seg.full button{flex:1;}
+
+  /* chips */
+  .chips{display:flex; flex-wrap:wrap; gap:7px; margin-top:12px;}
+  .chip{font-family:var(--mono); font-size:12px; color:var(--muted); background:var(--well);
+    border:1px solid var(--line-2); border-radius:7px; padding:6px 10px; cursor:pointer; transition:.12s;
+    letter-spacing:.02em;}
+  .chip:hover{color:var(--ink); border-color:var(--line-2);}
+  .chip[aria-pressed=true]{color:var(--amber); border-color:var(--amber); background:var(--amber-tint);}
+  .chip .cap{color:var(--muted); font-size:10px; margin-left:5px; letter-spacing:.05em;}
+  .chip[aria-pressed=true] .cap{color:var(--amber);}
+  .chipdiv{width:1px; align-self:stretch; background:var(--line); margin:0 3px;}
+
+  /* switch header */
+  .switchrow{display:flex; align-items:center; gap:12px; cursor:pointer;}
+  .switchrow .name{font-family:var(--sans); font-size:14px; color:var(--ink); letter-spacing:.01em;}
+  .switchrow .hint{font-family:var(--mono); font-size:10px; color:var(--muted); margin-left:auto;
+    letter-spacing:.1em; text-transform:uppercase;}
+  .track{width:38px; height:22px; border-radius:12px; background:var(--well);
+    border:1px solid var(--line-2); position:relative; transition:.16s; flex:none;}
+  .thumb{position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%;
+    background:var(--muted); transition:.16s;}
+  [aria-checked=true] .track{background:var(--amber-tint); border-color:var(--amber);}
+  [aria-checked=true] .thumb{left:18px; background:var(--amber);}
+  .switch{background:none; border:0; padding:0; margin:0; width:100%; text-align:left;}
+  .body{margin-top:14px;}
+
+  button:focus-visible, .switch:focus-visible{outline:2px solid var(--amber); outline-offset:2px;}
+  .foot{max-width:1080px; margin:20px auto 0; font-family:var(--mono); font-size:11px;
+    color:var(--muted); letter-spacing:.03em; border-top:1px solid var(--line); padding-top:14px;}
+</style>
+</head>
+<body>
+
+  <header class="masthead">
+    <div class="mark"><span class="iris"></span>Aspect</div>
+    <div class="sub">frame calculator · long side → full dimensions</div>
+  </header>
+
+  <main class="layout">
+
+    <!-- ================= STAGE ================= -->
+    <section class="stage">
+      <div class="readout" aria-live="polite">
+        <div>
+          <span class="ro-label" id="roLabel">Display · px</span>
+          <div class="ro-dims">
+            <span class="n" id="roW">1920</span><span class="x">×</span><span class="n" id="roH">804</span>
+            <button class="copy" id="copyBtn" title="Copy WxH">copy</button>
+          </div>
+        </div>
+        <div class="readout-storage hidden" id="storageBlock">
+          <span class="ro-label">Storage · px (encode at)</span>
+          <div class="ro-dims small">
+            <span class="n" id="stW">—</span><span class="x">×</span><span class="n" id="stH">—</span>
+            <button class="copy" id="copyStBtn" title="Copy storage WxH">copy</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="viewport"><svg id="svg" viewBox="0 0 640 380" role="img" aria-label="frame preview"></svg></div>
+
+      <div class="meta" id="meta"></div>
+    </section>
+
+    <!-- ================= CONTROLS ================= -->
+    <section class="controls">
+
+      <div class="panel">
+        <div class="plabel">Long side</div>
+        <div class="field">
+          <input type="number" id="value" value="1920" min="1" step="1" inputmode="numeric" aria-label="long side length in pixels">
+          <div class="seg" role="group" aria-label="entered dimension">
+            <button id="dimW" aria-pressed="true">W</button>
+            <button id="dimH" aria-pressed="false">H</button>
+          </div>
+        </div>
+        <div class="chips" id="resChips" role="group" aria-label="resolution presets"></div>
+      </div>
+
+      <div class="panel">
+        <div class="plabel">Aspect ratio <button class="swap" id="swapBtn" title="Flip orientation">⇄ flip</button></div>
+        <div class="field"><input type="text" id="ratio" value="2.39" aria-label="aspect ratio, e.g. 16:9 or 2.39"></div>
+        <div class="chips" id="ratioChips" role="group" aria-label="ratio presets"></div>
+      </div>
+
+      <div class="panel">
+        <div class="plabel">Rounding · short side</div>
+        <div class="seg full" role="group" aria-label="rounding">
+          <button data-mod="1">Exact</button>
+          <button data-mod="2" aria-pressed="true">×2</button>
+          <button data-mod="4">×4</button>
+          <button data-mod="8">×8</button>
+          <button data-mod="16">×16</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <button class="switch" id="parSwitch" role="switch" aria-checked="false">
+          <span class="switchrow">
+            <span class="track"><span class="thumb"></span></span>
+            <span class="name">Pixel aspect ratio</span>
+            <span class="hint">non-square px</span>
+          </span>
+        </button>
+        <div class="body hidden" id="parBody">
+          <div class="field"><input type="number" id="parVal" value="1" min="0.01" step="0.0001" aria-label="pixel aspect ratio value"></div>
+          <div class="chips" id="parChips" role="group" aria-label="PAR presets"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <button class="switch" id="contSwitch" role="switch" aria-checked="false">
+          <span class="switchrow">
+            <span class="track"><span class="thumb"></span></span>
+            <span class="name">Fit inside a delivery frame</span>
+            <span class="hint">letterbox</span>
+          </span>
+        </button>
+        <div class="body hidden" id="contBody">
+          <div class="field"><input type="text" id="contRatio" value="16:9" aria-label="container ratio"></div>
+          <div class="chips" id="contChips" role="group" aria-label="container presets"></div>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <div class="foot">Self-contained · no dependencies · drop in a repo as index.html → enable GitHub Pages. State is saved to the URL, so bookmark any setup.</div>
+
+<script>
+(function(){
+  "use strict";
+  const $ = s => document.querySelector(s);
+  const svg = $("#svg");
+
+  const state = {
+    value:1920, dim:"w", ratio:"2.39", mod:2,
+    par:{on:false, val:1}, cont:{on:false, ratio:"16:9"}
+  };
+
+  const RES = [1280,1920,2048,3840,4096,6144,7680];
+  const RATIOS = [
+    {v:"16:9"}, {v:"1.85"}, {v:"1.90"}, {v:"2.00"}, {v:"2.35"},
+    {v:"2.39"}, {v:"2.40"}, {v:"4:3"}, {d:1},
+    {v:"9:16"}, {v:"4:5"}, {v:"1:1"}
+  ];
+  const PARS = [
+    {v:1,      c:"Square"}, {v:0.9091, c:"DV NTSC"}, {v:1.2121, c:"NTSC 16:9"},
+    {v:1.0940, c:"DV PAL"}, {v:1.4587, c:"PAL 16:9"}, {v:1.3333, c:"HD Anam"},
+    {v:1.5,    c:"DVCPRO HD"}, {v:2.0,   c:"Anam 2×"}
+  ];
+  const CONTS = ["16:9","1.85","1.90","2.39","4:3","1:1"];
+
+  // ---------- helpers ----------
+  function parseRatio(str){
+    if(str==null) return NaN;
+    str = String(str).trim().replace(",",".");
+    if(str.indexOf(":")>-1){
+      const p = str.split(":");
+      const a=parseFloat(p[0]), b=parseFloat(p[1]);
+      return (a>0 && b>0) ? a/b : NaN;
+    }
+    const v=parseFloat(str);
+    return v>0 ? v : NaN;
+  }
+  const snap = (v,m) => m<=1 ? Math.round(v) : Math.round(v/m)*m;
+  const fmt  = n => Number(n).toLocaleString("en-US");
+  const near = (a,b) => Math.abs(a-b) < 0.0006;
+
+  // ---------- build chip UIs ----------
+  const resChips = $("#resChips");
+  RES.forEach(r=>{
+    const b=document.createElement("button"); b.className="chip"; b.textContent=fmt(r);
+    b.onclick=()=>{ state.value=r; $("#value").value=r; render(); };
+    resChips.appendChild(b);
+  });
+  const ratioChips = $("#ratioChips");
+  RATIOS.forEach(o=>{
+    if(o.d){ const d=document.createElement("div"); d.className="chipdiv"; ratioChips.appendChild(d); return; }
+    const b=document.createElement("button"); b.className="chip"; b.dataset.v=o.v; b.textContent=o.v;
+    b.onclick=()=>{ state.ratio=o.v; $("#ratio").value=o.v; render(); };
+    ratioChips.appendChild(b);
+  });
+  const parChips=$("#parChips");
+  PARS.forEach(o=>{
+    const b=document.createElement("button"); b.className="chip"; b.dataset.v=o.v;
+    b.innerHTML = o.v.toFixed(4).replace(/0+$/,"").replace(/\.$/,"") + '<span class="cap">'+o.c+'</span>';
+    b.onclick=()=>{ state.par.val=o.v; $("#parVal").value=o.v; render(); };
+    parChips.appendChild(b);
+  });
+  const contChips=$("#contChips");
+  CONTS.forEach(v=>{
+    const b=document.createElement("button"); b.className="chip"; b.dataset.v=v; b.textContent=v;
+    b.onclick=()=>{ state.cont.ratio=v; $("#contRatio").value=v; render(); };
+    contChips.appendChild(b);
+  });
+
+  // ---------- input wiring ----------
+  $("#value").addEventListener("input",e=>{ const n=parseFloat(e.target.value); state.value=n>0?n:0; render(); });
+  $("#ratio").addEventListener("input",e=>{ state.ratio=e.target.value; render(); });
+  $("#parVal").addEventListener("input",e=>{ const n=parseFloat(e.target.value); state.par.val=n>0?n:0; render(); });
+  $("#contRatio").addEventListener("input",e=>{ state.cont.ratio=e.target.value; render(); });
+
+  $("#dimW").onclick=()=>{ state.dim="w"; render(); };
+  $("#dimH").onclick=()=>{ state.dim="h"; render(); };
+
+  document.querySelectorAll(".seg.full button").forEach(b=>{
+    b.onclick=()=>{ state.mod=parseInt(b.dataset.mod,10); render(); };
+  });
+
+  $("#swapBtn").onclick=()=>{
+    let s=state.ratio.trim();
+    if(s.indexOf(":")>-1){ const p=s.split(":"); state.ratio=p[1].trim()+":"+p[0].trim(); }
+    else { const v=parseRatio(s); if(v>0){ const inv=1/v; state.ratio = inv>=1? String(+inv.toFixed(4)) : String(+inv.toFixed(4)); } }
+    $("#ratio").value=state.ratio; render();
+  };
+
+  function bindSwitch(btnId, bodyId, key){
+    const btn=$(btnId), body=$(bodyId);
+    btn.onclick=()=>{ state[key].on=!state[key].on; render(); };
+  }
+  bindSwitch("#parSwitch","#parBody","par");
+  bindSwitch("#contSwitch","#contBody","cont");
+
+  function flashCopy(btn, text){
+    if(!navigator.clipboard){ return; }
+    navigator.clipboard.writeText(text).then(()=>{
+      const old=btn.textContent; btn.textContent="copied"; btn.classList.add("ok");
+      setTimeout(()=>{ btn.textContent=old; btn.classList.remove("ok"); },1100);
+    }).catch(()=>{});
+  }
+
+  // ---------- URL state ----------
+  function readUrl(){
+    const q=new URLSearchParams(location.hash.replace(/^#/,""));
+    if(q.has("v")){ const n=parseFloat(q.get("v")); if(n>0) state.value=n; }
+    if(q.get("d")==="h") state.dim="h";
+    if(q.has("r")) state.ratio=q.get("r");
+    if(q.has("m")){ const m=parseInt(q.get("m"),10); if([1,2,4,8,16].includes(m)) state.mod=m; }
+    if(q.get("par")==="1"){ state.par.on=true; const p=parseFloat(q.get("pv")); if(p>0) state.par.val=p; }
+    if(q.get("c")==="1"){ state.cont.on=true; if(q.has("cr")) state.cont.ratio=q.get("cr"); }
+    $("#value").value=state.value; $("#ratio").value=state.ratio;
+    $("#parVal").value=state.par.val; $("#contRatio").value=state.cont.ratio;
+  }
+  function syncUrl(){
+    const q=new URLSearchParams();
+    q.set("v",state.value); q.set("d",state.dim); q.set("r",state.ratio); q.set("m",state.mod);
+    if(state.par.on){ q.set("par","1"); q.set("pv",state.par.val); }
+    if(state.cont.on){ q.set("c","1"); q.set("cr",state.cont.ratio); }
+    history.replaceState(null,"","#"+q.toString());
+  }
+
+  // ---------- core render ----------
+  function render(){
+    // reflect toggles
+    $("#dimW").setAttribute("aria-pressed", state.dim==="w");
+    $("#dimH").setAttribute("aria-pressed", state.dim==="h");
+    document.querySelectorAll(".seg.full button").forEach(b=>
+      b.setAttribute("aria-pressed", parseInt(b.dataset.mod,10)===state.mod));
+    $("#parSwitch").setAttribute("aria-checked", state.par.on);
+    $("#contSwitch").setAttribute("aria-checked", state.cont.on);
+    $("#parBody").classList.toggle("hidden", !state.par.on);
+    $("#contBody").classList.toggle("hidden", !state.cont.on);
+    $("#storageBlock").classList.toggle("hidden", !(state.par.on && !near(state.par.val,1)));
+
+    // chip active states
+    const R = parseRatio(state.ratio);
+    document.querySelectorAll("#ratioChips .chip").forEach(c=>
+      c.setAttribute("aria-pressed", near(parseRatio(c.dataset.v), R)));
+    document.querySelectorAll("#resChips .chip").forEach(c=>
+      c.setAttribute("aria-pressed", parseInt(c.textContent.replace(/,/g,""),10)===state.value));
+    document.querySelectorAll("#parChips .chip").forEach(c=>
+      c.setAttribute("aria-pressed", near(parseFloat(c.dataset.v), state.par.val)));
+    document.querySelectorAll("#contChips .chip").forEach(c=>
+      c.setAttribute("aria-pressed", near(parseRatio(c.dataset.v), parseRatio(state.cont.ratio))));
+
+    const ratioBad = !(R>0);
+    const valBad   = !(state.value>0);
+    $("#ratio").classList.toggle("bad", ratioBad);
+    $("#value").classList.toggle("bad", valBad);
+
+    if(ratioBad || valBad){
+      $("#roW").textContent="—"; $("#roH").textContent="—";
+      drawEmpty();
+      $("#meta").innerHTML='<div class="row warn">Enter a length and a ratio like <b>16:9</b> or <b>2.39</b>.</div>';
+      syncUrl(); return;
+    }
+
+    // base display frame (square-pixel geometry)
+    let W,H, exactOther;
+    if(state.dim==="w"){ W=Math.round(state.value); exactOther=state.value/R; H=snap(exactOther,state.mod); }
+    else{ H=Math.round(state.value); exactOther=state.value*R; W=snap(exactOther,state.mod); }
+
+    const actual = W/H;
+    const px = W*H;
+
+    $("#roW").textContent=fmt(W); $("#roH").textContent=fmt(H);
+    $("#roLabel").textContent = (state.par.on && !near(state.par.val,1)) ? "Display · px (square-pixel)" : "Frame · px";
+
+    // meta rows
+    const rows=[];
+    rows.push('<div class="row">Exact short side <b>'+exactOther.toFixed(1)+' px</b></div>');
+    rows.push('<div class="row">Actual ratio <b>'+actual.toFixed(3)+' : 1</b> <span style="color:var(--muted)">(target '+R.toFixed(3)+')</span></div>');
+    rows.push('<div class="row">'+fmt(px)+' px · <b>'+(px/1e6).toFixed(2)+' MP</b></div>');
+
+    if(state.mod===1 && (W%2!==0 || H%2!==0)){
+      rows.push('<div class="row warn">Odd dimension — most codecs need even. Try ×2.</div>');
+    }
+
+    // PAR -> storage pixels
+    let stW=null, stH=null;
+    if(state.par.on && !near(state.par.val,1) && state.par.val>0){
+      stW = snap(W/state.par.val, state.mod);
+      stH = H;
+      $("#stW").textContent=fmt(stW); $("#stH").textContent=fmt(stH);
+      rows.push('<div class="row">DAR <b>'+actual.toFixed(3)+'</b> · PAR <b>'+(+state.par.val.toFixed(4))+'</b> · SAR '+(stW/stH).toFixed(3)+'</div>');
+    }
+
+    // container / letterbox
+    let box=null;
+    if(state.cont.on){
+      const Rc=parseRatio(state.cont.ratio);
+      if(Rc>0){
+        const cW=W, cH=snap(W/Rc, state.mod);       // delivery frame sized off the frame width
+        let fitW,fitH,barTB=0,barLR=0,kind;
+        if(R>=Rc){ kind="Letterbox"; fitW=cW; fitH=snap(cW/R,state.mod); barTB=Math.round((cH-fitH)/2); }
+        else     { kind="Pillarbox"; fitH=cH; fitW=snap(cH*R,state.mod); barLR=Math.round((cW-fitW)/2); }
+        box={cW,cH,fitW,fitH,barTB,barLR,kind};
+        const barTxt = kind==="Letterbox" ? barTB+" px top / bottom" : barLR+" px left / right";
+        rows.push('<div class="row"><span class="tag lb">'+kind+'</span> bars <b>'+barTxt+'</b></div>');
+        rows.push('<div class="row">Content <b>'+fmt(fitW)+'×'+fmt(fitH)+'</b> in <b>'+fmt(cW)+'×'+fmt(cH)+'</b></div>');
+      }
+    }
+    $("#meta").innerHTML=rows.join("");
+
+    draw(W,H,box);
+    syncUrl();
+
+    // stash for copy
+    render._copy = fmt(W)+"×"+fmt(H).replace(/,/g,"");
+    render._copyPlain = W+"x"+H;
+    render._copySt = stW!=null ? stW+"x"+stH : null;
+  }
+
+  // ---------- preview drawing ----------
+  const VB_W=640, VB_H=380, PAD=52;
+  const AVW=VB_W-2*PAD, AVH=VB_H-2*PAD;
+
+  function drawEmpty(){ svg.innerHTML=""; }
+
+  function draw(W,H,box){
+    const fitW = box? box.cW : W;
+    const fitH = box? box.cH : H;
+    const s = Math.min(AVW/fitW, AVH/fitH);
+    const oW=fitW*s, oH=fitH*s;
+    const ox=(VB_W-oW)/2, oy=(VB_H-oH)/2;
+
+    // content rect (amber)
+    let cw,ch,cx,cy, contentW, contentH;
+    if(box){ contentW=box.fitW; contentH=box.fitH; cw=contentW*s; ch=contentH*s;
+             cx=ox+(oW-cw)/2; cy=oy+(oH-ch)/2; }
+    else   { contentW=W; contentH=H; cw=oW; ch=oH; cx=ox; cy=oy; }
+
+    const cxc=cx+cw/2, cyc=cy+ch/2;
+    let g="";
+
+    // container matte (bars read as near-black)
+    if(box){
+      g+=rect(ox,oy,oW,oH,{fill:"#0A0D11",stroke:"var(--cyan)",sw:1,op:.55});
+      g+=corners(ox,oy,oW,oH,"var(--cyan)",.6);
+    }
+    // content fill + border
+    g+=rect(cx,cy,cw,ch,{fill:"var(--amber-tint)",stroke:"var(--amber)",sw:1.4});
+    if(!box) g+=corners(cx,cy,cw,ch,"var(--amber)",.9);
+
+    // thirds (framing aid)
+    const t=.16;
+    g+=line(cx+cw/3,cy,cx+cw/3,cy+ch,"var(--amber)",.7,t);
+    g+=line(cx+2*cw/3,cy,cx+2*cw/3,cy+ch,"var(--amber)",.7,t);
+    g+=line(cx,cy+ch/3,cx+cw,cy+ch/3,"var(--amber)",.7,t);
+    g+=line(cx,cy+2*ch/3,cx+cw,cy+2*ch/3,"var(--amber)",.7,t);
+    // center cross
+    g+=line(cxc-9,cyc,cxc+9,cyc,"var(--amber)",1,.5);
+    g+=line(cxc,cyc-9,cxc,cyc+9,"var(--amber)",1,.5);
+
+    // edge labels
+    g+='<text x="'+cxc+'" y="'+(cy-9)+'" text-anchor="middle" class="lbl">'+fmt(contentW)+'</text>';
+    g+='<text x="'+(cx+cw+9)+'" y="'+cyc+'" text-anchor="middle" transform="rotate(-90 '+(cx+cw+9)+' '+cyc+')" class="lbl">'+fmt(contentH)+'</text>';
+
+    svg.innerHTML =
+      '<style>.lbl{font-family:var(--mono);font-size:12px;fill:var(--amber-2);letter-spacing:.04em;}</style>'+g;
+  }
+  function rect(x,y,w,h,o){
+    return '<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+h.toFixed(1)+
+      '" rx="2" fill="'+(o.fill||"none")+'" stroke="'+(o.stroke||"none")+'" stroke-width="'+(o.sw||0)+
+      '" '+(o.op!=null?'opacity="'+o.op+'"':'')+'/>';
+  }
+  function line(x1,y1,x2,y2,c,w,op){
+    return '<line x1="'+x1.toFixed(1)+'" y1="'+y1.toFixed(1)+'" x2="'+x2.toFixed(1)+'" y2="'+y2.toFixed(1)+
+      '" stroke="'+c+'" stroke-width="'+w+'" opacity="'+op+'"/>';
+  }
+  function corners(x,y,w,h,c,op){
+    const L=13, s='stroke="'+c+'" stroke-width="1.4" opacity="'+op+'" fill="none"';
+    const p=(a,b,cc,dd,ee,ff)=>'<path d="M'+a+' '+b+' L'+cc+' '+dd+' M'+cc+' '+dd+' L'+ee+' '+ff+'" '+s+'/>';
+    return  p(x,y+L, x,y, x+L,y) +
+            p(x+w-L,y, x+w,y, x+w,y+L) +
+            p(x,y+h-L, x,y+h, x+L,y+h) +
+            p(x+w-L,y+h, x+w,y+h, x+w,y+h-L);
+  }
+
+  // copy buttons
+  $("#copyBtn").onclick=()=>flashCopy($("#copyBtn"), render._copyPlain||"");
+  $("#copyStBtn").onclick=()=>{ if(render._copySt) flashCopy($("#copyStBtn"), render._copySt); };
+
+  readUrl();
+  render();
+})();
+</script>
+</body>
+</html>
